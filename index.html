@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Brain Train - Cognitive Workout</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg-color: #F9FAFB;
+            --text-main: #111827;
+            --card-bg: #FFFFFF;
+            --success: #10B981;
+            --danger: #EF4444;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); transition: background-color 0.3s; }
+        
+        /* Utility untuk in-game agar fixed screen */
+        .no-scroll { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
+        
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .hidden { display: none !important; }
+        
+        /* Typography & Components */
+        h1, h2, h3 { text-align: center; margin-bottom: 15px; }
+        .text-center { text-align: center; }
+        
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        .btn { display: block; width: 100%; padding: 15px; margin-bottom: 10px; border: none; border-radius: 8px; background: var(--primary); color: white; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+        .stat-box { background: var(--card-bg); padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #E5E7EB; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .stat-box span { display: block; font-size: 24px; font-weight: bold; color: var(--primary); }
+        
+        /* Game Screen Layout */
+        #game-screen { height: 100vh; display: flex; flex-direction: column; padding: 20px; }
+        .game-header { display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: bold; margin-bottom: auto; padding-bottom: 20px; border-bottom: 2px solid #E5E7EB; }
+        .question-area { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 1.5rem; min-height: 200px; }
+        .options-area { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .options-area .btn { margin-bottom: 0; padding: 20px 10px; }
+        
+        /* Memory Text Specific */
+        .memory-text { font-size: 3rem; letter-spacing: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="main-menu" class="container">
+        <h1>Brain Train</h1>
+        <p class="text-center" style="margin-bottom: 20px; color: #6B7280;">Latih Kognitif Anda Setiap Hari</p>
+        
+        <div class="card">
+            <h3>Track Record (High Scores)</h3>
+            <div class="stats-grid" id="stats-container">
+                </div>
+        </div>
+
+        <div class="card">
+            <h3>Pilih Mode Latihan</h3>
+            <button class="btn" onclick="startGame('math')">Mental Math</button>
+            <button class="btn" onclick="startGame('attention')">Attention (Fokus)</button>
+            <button class="btn" onclick="startGame('problem')">Problem Solving</button>
+            <button class="btn" onclick="startGame('memory')">Memory</button>
+            <button class="btn" onclick="startGame('language')">Language (Bahasa)</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="container hidden">
+        <div class="game-header">
+            <div>Waktu: <span id="timer">30</span>s</div>
+            <div>Skor: <span id="score">0</span></div>
+        </div>
+        
+        <div class="question-area" id="question-text">
+            </div>
+        
+        <div class="options-area" id="options-container">
+            </div>
+    </div>
+
+    <div id="result-screen" class="container hidden text-center" style="margin-top: 50px;">
+        <div class="card">
+            <h2>Waktu Habis!</h2>
+            <p>Skor Anda: <span id="final-score" style="font-size: 2rem; font-weight: bold; color: var(--primary); display: block; margin: 10px 0;">0</span></p>
+            <p id="new-record-msg" class="hidden" style="color: var(--success); font-weight: bold; margin-bottom: 15px;">Rekor Baru!</p>
+            <button class="btn" onclick="goHome()">Kembali ke Menu Utama</button>
+        </div>
+    </div>
+
+    <script>
+        // --- STATE & DATA ---
+        let currentCategory = '';
+        let score = 0;
+        let timer = 30;
+        let gameInterval;
+        let currentAnswer = null;
+        
+        const categories = {
+            math: "Mental Math",
+            attention: "Attention",
+            problem: "Problem Solving",
+            memory: "Memory",
+            language: "Language"
+        };
+
+        // --- STATS MANAGEMENT ---
+        function loadStats() {
+            const statsGrid = document.getElementById('stats-container');
+            statsGrid.innerHTML = '';
+            for (let key in categories) {
+                let highScore = localStorage.getItem('highScore_' + key) || 0;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        ${categories[key]}
+                        <span id="stat-${key}">${highScore}</span>
+                    </div>
+                `;
+            }
+        }
+
+        // --- NAVIGATION ---
+        function goHome() {
+            document.body.classList.remove('no-scroll');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            loadStats();
+        }
+
+        function startGame(category) {
+            currentCategory = category;
+            score = 0;
+            timer = 30;
+            
+            // Fix screen for game mode
+            document.body.classList.add('no-scroll');
+            
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            
+            updateScoreUI();
+            updateTimerUI();
+            
+            gameInterval = setInterval(() => {
+                timer--;
+                updateTimerUI();
+                if (timer <= 0) endGame();
+            }, 1000);
+
+            nextQuestion();
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+
+            let highScoreKey = 'highScore_' + currentCategory;
+            let currentHighScore = parseInt(localStorage.getItem(highScoreKey)) || 0;
+            
+            let recordMsg = document.getElementById('new-record-msg');
+            if (score > currentHighScore) {
+                localStorage.setItem(highScoreKey, score);
+                recordMsg.classList.remove('hidden');
+            } else {
+                recordMsg.classList.add('hidden');
+            }
+        }
+
+        // --- UTILITIES ---
+        function updateScoreUI() { document.getElementById('score').innerText = score; }
+        function updateTimerUI() { document.getElementById('timer').innerText = timer; }
+        
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function renderQuestion(questionHTML, options, correctIndex) {
+            document.getElementById('question-text').innerHTML = questionHTML;
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            
+            currentAnswer = options[correctIndex];
+            
+            // Shuffle options visually
+            let shuffledOptions = shuffle([...options]);
+            
+            shuffledOptions.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(opt);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(selected) {
+            if (selected === currentAnswer) {
+                score += 10;
+                updateScoreUI();
+                nextQuestion();
+            } else {
+                // Penalti waktu jika salah
+                timer = Math.max(0, timer - 2); 
+                updateTimerUI();
+                
+                // Visual feedback (Flash red)
+                document.body.style.backgroundColor = "#fee2e2";
+                setTimeout(() => document.body.style.backgroundColor = "var(--bg-color)", 200);
+            }
+        }
+
+        // --- GAME LOGICS ---
+        function nextQuestion() {
+            if (currentCategory === 'math') generateMath();
+            else if (currentCategory === 'attention') generateAttention();
+            else if (currentCategory === 'problem') generateProblem();
+            else if (currentCategory === 'language') generateLanguage();
+            else if (currentCategory === 'memory') generateMemory();
+        }
+
+        function generateMath() {
+            let ops = ['+', '-', '*'];
+            let op = ops[Math.floor(Math.random() * ops.length)];
+            let a = Math.floor(Math.random() * 20) + 1;
+            let b = Math.floor(Math.random() * 20) + 1;
+            if (op === '*') { a = Math.floor(Math.random() * 9) + 2; b = Math.floor(Math.random() * 9) + 2; }
+            
+            let ans = eval(`${a} ${op} ${b}`);
+            let options = [ans, ans + 1, ans - 1, ans + 2];
+            
+            renderQuestion(`Berapa hasil dari:<br><b style="font-size:2rem">${a} ${op} ${b}</b>`, options, 0);
+        }
+
+        function generateAttention() {
+            const colors = [
+                {name: 'MERAH', hex: 'red'}, {name: 'BIRU', hex: 'blue'}, 
+                {name: 'HIJAU', hex: 'green'}, {name: 'KUNING', hex: '#eab308'}
+            ];
+            let wordObj = colors[Math.floor(Math.random() * colors.length)];
+            let colorObj = colors[Math.floor(Math.random() * colors.length)];
+            
+            let options = colors.map(c => c.name);
+            let correctColorName = colorObj.name;
+            
+            renderQuestion(
+                `<p style="font-size:1.2rem; margin-bottom:10px;">Pilih <b>WARNA TINTA</b> dari kata di bawah ini (Bukan bacanya):</p>
+                 <span style="color: ${colorObj.hex}; font-size: 3rem; font-weight: bold; text-shadow: 1px 1px 2px #aaa;">${wordObj.name}</span>`, 
+                options, 
+                options.indexOf(correctColorName)
+            );
+        }
+
+        function generateProblem() {
+            // Number sequences
+            let start = Math.floor(Math.random() * 10) + 1;
+            let step = Math.floor(Math.random() * 5) + 2;
+            let isMultiply = Math.random() > 0.5;
+            
+            let seq = [];
+            let current = start;
+            for(let i=0; i<3; i++) {
+                seq.push(current);
+                current = isMultiply ? current * step : current + step;
+            }
+            
+            let ans = current;
+            let options = [ans, ans + step, ans - step, ans + 1];
+            
+            renderQuestion(`Lengkapi deret berikut:<br><b style="font-size:2rem">${seq.join(', ')}, ?</b>`, options, 0);
+        }
+
+        function generateLanguage() {
+            const words = ["BUKU", "MEJA", "KACA", "KOPI", "PINTU", "LAMPU", "GELAS", "MOBIL"];
+            let word = words[Math.floor(Math.random() * words.length)];
+            
+            // Acak huruf
+            let arr = word.split('');
+            shuffle(arr);
+            let scrambled = arr.join(' ');
+            
+            // Pilihan (1 benar, 3 acak lainnya)
+            let options = [word];
+            while(options.length < 4) {
+                let w = words[Math.floor(Math.random() * words.length)];
+                if(!options.includes(w)) options.push(w);
+            }
+            
+            renderQuestion(`Susun menjadi kata yang benar:<br><b style="font-size:2.5rem">${scrambled}</b>`, options, 0);
+        }
+
+        function generateMemory() {
+            // Flash a number for 1.5 seconds, then ask
+            let length = Math.floor(score / 30) + 4; // Bertambah panjang sesuai skor
+            let numStr = '';
+            for(let i=0; i<length; i++) numStr += Math.floor(Math.random() * 10);
+            
+            document.getElementById('options-container').classList.add('hidden');
+            document.getElementById('question-text').innerHTML = `Hafalkan angka ini:<br><div class="memory-text">${numStr}</div>`;
+            
+            setTimeout(() => {
+                if(currentCategory !== 'memory') return; // if user quit
+                
+                document.getElementById('question-text').innerHTML = `Angka berapa yang baru saja muncul?`;
+                document.getElementById('options-container').classList.remove('hidden');
+                
+                let options = [numStr];
+                // Generate fake options by changing 1 digit
+                while(options.length < 4) {
+                    let arr = numStr.split('');
+                    let changeIdx = Math.floor(Math.random() * arr.length);
+                    arr[changeIdx] = Math.floor(Math.random() * 10).toString();
+                    let fake = arr.join('');
+                    if(!options.includes(fake)) options.push(fake);
+                }
+                
+                renderQuestion(`Angka berapa yang baru saja muncul?`, options, 0);
+            }, 1500);
+        }
+
+        // --- INIT ---
+        loadStats();
+    </script>
+</body>
+</html>
